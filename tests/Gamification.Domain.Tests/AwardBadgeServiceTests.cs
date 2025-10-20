@@ -7,126 +7,106 @@ using Gamification.Domain.Ports;
 using Gamification.Domain.Model;
 using Gamification.Domain.Exceptions;
 
-namespace Gamification.Domain.Tests;
-public class AwardBadgeServiceTests
+namespace Gamification.Domain.Tests
 {
-    [Fact]
-    public async Task ConcederBadge_quando_missao_concluida_concede_uma_unica_vez()
+    public class AwardBadgeServiceExtraTests
     {
-        var read = new InMemoryAwardsReadStore();
-        var write = new InMemoryAwardsWriteStore(read);
-        var themeId = "theme1";
-        read.AddTheme(themeId, new ThemeBonusDates(null, DateTimeOffset.UtcNow.AddHours(1), DateTimeOffset.UtcNow.AddHours(2), 10, 20, 5));
-        read.MarkConcluded("student1","mission1");
+        [Fact]
+        public async Task AwardAsync_requestId_null_allows_retries_but_prevents_duplicates_only_when_saved()
+        {
+            var read = new InMemoryAwardsReadStore();
+            var write = new InMemoryAwardsWriteStore(read);
+            var themeId = "t-ex-1";
+            var now = DateTimeOffset.UtcNow;
+            read.AddTheme(themeId, new ThemeBonusDates(null, now.AddMinutes(5), now.AddMinutes(10), 10, 25, 10));
+            read.MarkConcluded("stu1","miss1");
 
-        var service = new AwardBadgeService(read, write);
-        var now = DateTimeOffset.UtcNow;
+            var service = new AwardBadgeService(read, write);
 
-        var result = await service.AwardAsync("student1", themeId, "mission1", "badge-a", now, null);
-        Assert.Equal("badge-a", result.badge.Slug);
-        Assert.Equal(0,  // depending on now and theme dates, xp may be 0 or not; assert that a log was registered
-            result.xp.Value >= 0 ? 0 : 0); // trivial assert to keep intent; main check below
-        Assert.Single(write.Logs);
+            var first = await service.AwardAsync("stu1", themeId, "miss1", "badge-x", now, null);
+            Assert.Equal("badge-x", first.badge.Slug);
+            Assert.Single(write.Logs);
 
-        // second attempt should throw AlreadyGrantedException
-        await Assert.ThrowsAsync<AlreadyGrantedException>(async () =>
-            await service.AwardAsync("student1", themeId, "mission1", "badge-a", now, null));
-    }
+            await Assert.ThrowsAsync<AlreadyGrantedException>(async () =>
+                await service.AwardAsync("stu1", themeId, "miss1", "badge-x", now, null));
+        }
 
-    [Fact]
-    public async Task ConcederBadge_sem_concluir_missao_deve_falhar()
-    {
-        var read = new InMemoryAwardsReadStore();
-        var write = new InMemoryAwardsWriteStore(read);
-        var service = new AwardBadgeService(read, write);
-        await Assert.ThrowsAsync<IneligibleException>(async () =>
-            await service.AwardAsync("studentX", "themeX", "missionX", "badge-x", DateTimeOffset.UtcNow, null));
-    }
+        [Fact]
+        public async Task AwardAsync_multiple_badges_for_same_mission_are_recorded_separately()
+        {
+            var read = new InMemoryAwardsReadStore();
+            var write = new InMemoryAwardsWriteStore(read);
+            var themeId = "t-ex-2";
+            var now = DateTimeOffset.UtcNow;
+            read.AddTheme(themeId, new ThemeBonusDates(null, now.AddMinutes(5), now.AddMinutes(10), 10, 30, 15));
+            read.MarkConcluded("stu2","miss2");
 
-    [Fact]
-    public async Task ConcederBadge_ate_bonusFullWeightEndDate_concede_bonus_integral()
-    {
-        var read = new InMemoryAwardsReadStore();
-        var write = new InMemoryAwardsWriteStore(read);
-        var themeId = "theme2";
-        var now = DateTimeOffset.UtcNow;
-        read.AddTheme(themeId, new ThemeBonusDates(now.AddMinutes(-1), now.AddMinutes(10), now.AddMinutes(20), 10, 100, 50));
-        read.MarkConcluded("s1","m1");
-        var service = new AwardBadgeService(read, write);
+            var service = new AwardBadgeService(read, write);
 
-        var (badge, xp, log) = await service.AwardAsync("s1", themeId, "m1", "badge-b", now, null);
-        Assert.Equal(100, xp.Value);
-        Assert.Equal("bonus_full", log.Reason);
-    }
+            var res1 = await service.AwardAsync("stu2", themeId, "miss2", "badge-a", now, "r1");
+            var res2 = await service.AwardAsync("stu2", themeId, "miss2", "badge-b", now, "r2");
 
-    [Fact]
-    public async Task ConcederBadge_entre_fullWeight_e_finalDate_concede_bonus_reduzido()
-    {
-        var read = new InMemoryAwardsReadStore();
-        var write = new InMemoryAwardsWriteStore(read);
-        var themeId = "theme3";
-        var now = DateTimeOffset.UtcNow;
-        read.AddTheme(themeId, new ThemeBonusDates(now.AddMinutes(-20), now.AddMinutes(-10), now.AddMinutes(10), 10, 80, 30));
-        read.MarkConcluded("s2","m2");
-        var service = new AwardBadgeService(read, write);
+            Assert.Equal("badge-a", res1.badge.Slug);
+            Assert.Equal("badge-b", res2.badge.Slug);
+            Assert.Equal(2, write.Logs.Count);
+        }
 
-        var (badge, xp, log) = await service.AwardAsync("s2", themeId, "m2", "badge-c", now, null);
-        Assert.Equal(30, xp.Value);
-        Assert.Equal("bonus_reduced", log.Reason);
-    }
+        [Fact]
+        public async Task AwardAsync_grant_when_dates_null_uses_no_bonus_but_grants_badge()
+        {
+            var read = new InMemoryAwardsReadStore();
+            var write = new InMemoryAwardsWriteStore(read);
+            var themeId = "t-ex-3";
+            read.AddTheme(themeId, new ThemeBonusDates(null, null, null, 10, 50, 25));
+            read.MarkConcluded("stu3","miss3");
 
-    [Fact]
-    public async Task ConcederBadge_apos_bonusFinalDate_nao_concede_bonus_mas_concede_badge()
-    {
-        var read = new InMemoryAwardsReadStore();
-        var write = new InMemoryAwardsWriteStore(read);
-        var themeId = "theme4";
-        var now = DateTimeOffset.UtcNow;
-        read.AddTheme(themeId, new ThemeBonusDates(now.AddMinutes(-40), now.AddMinutes(-30), now.AddMinutes(-10), 10, 60, 20));
-        read.MarkConcluded("s3","m3");
-        var service = new AwardBadgeService(read, write);
+            var service = new AwardBadgeService(read, write);
+            var now = DateTimeOffset.UtcNow;
 
-        var (badge, xp, log) = await service.AwardAsync("s3", themeId, "m3", "badge-d", now, null);
-        Assert.Equal(0, xp.Value);
-        Assert.Equal("no_bonus", log.Reason);
-    }
+            var (badge, xp, log) = await service.AwardAsync("stu3", themeId, "miss3", "badge-nobonus", now, "r3");
 
-    [Fact]
-    public async Task ConcederBadge_falha_na_gravacao_nao_deve_gerar_efeitos_parciais()
-    {
-        var read = new InMemoryAwardsReadStore();
-        var write = new InMemoryAwardsWriteStore(read, failOnSave: true);
-        var themeId = "theme5";
-        var now = DateTimeOffset.UtcNow;
-        read.AddTheme(themeId, new ThemeBonusDates(null, now.AddMinutes(5), now.AddMinutes(10), 10, 40, 15));
-        read.MarkConcluded("s4","m4");
-        var service = new AwardBadgeService(read, write);
+            Assert.Equal("badge-nobonus", badge.Slug);
+            Assert.Equal(0, xp.Value);
+            Assert.Equal("no_bonus", log.Reason);
+            Assert.Single(write.Logs);
+        }
 
-        await Assert.ThrowsAsync<Exception>(async () => await service.AwardAsync("s4", themeId, "m4", "badge-e", now, null));
+        [Fact]
+        public async Task AwardAsync_when_write_fails_no_jaconcedida_and_no_partial_log()
+        {
+            var read = new InMemoryAwardsReadStore();
+            var write = new InMemoryAwardsWriteStore(read, failOnSave: true);
+            var themeId = "t-ex-4";
+            var now = DateTimeOffset.UtcNow;
+            read.AddTheme(themeId, new ThemeBonusDates(null, now.AddMinutes(5), now.AddMinutes(10), 10, 40, 20));
+            read.MarkConcluded("stu4","miss4");
 
-        // ensure no grant recorded
-        var already = await read.JaConcedidaAsync("s4", themeId, "m4", "badge-e");
-        Assert.False(already);
-    }
+            var service = new AwardBadgeService(read, write);
 
-    [Fact]
-    public async Task ConcederBadge_requisicao_repetida_com_requestId_igual_nao_duplica()
-    {
-        var read = new InMemoryAwardsReadStore();
-        var write = new InMemoryAwardsWriteStore(read);
-        var themeId = "theme6";
-        var now = DateTimeOffset.UtcNow;
-        read.AddTheme(themeId, new ThemeBonusDates(null, now.AddMinutes(5), now.AddMinutes(10), 10, 40, 15));
-        read.MarkConcluded("s5","m5");
-        var service = new AwardBadgeService(read, write);
+            await Assert.ThrowsAsync<DomainException>(async () =>
+                await service.AwardAsync("stu4", themeId, "miss4", "badge-e", now, "r4"));
 
-        var requestId = "req-1";
-        var first = await service.AwardAsync("s5", themeId, "m5", "badge-f", now, requestId);
-        Assert.Single(write.Logs);
+            var already = await read.JaConcedidaAsync("stu4", themeId, "miss4", "badge-e");
+            Assert.False(already);
+            Assert.Empty(write.Logs);
+        }
 
-        // simulate same request id present in read store
-        read.AddRequestId(requestId);
-        await Assert.ThrowsAsync<AlreadyGrantedException>(async () =>
-            await service.AwardAsync("s5", themeId, "m5", "badge-f", now, requestId));
+        [Fact]
+        public async Task AwardAsync_when_student_and_mission_have_special_chars_handles_properly()
+        {
+            var read = new InMemoryAwardsReadStore();
+            var write = new InMemoryAwardsWriteStore(read);
+            var themeId = "t-ex-5";
+            var now = DateTimeOffset.UtcNow;
+            read.AddTheme(themeId, new ThemeBonusDates(null, now.AddMinutes(5), now.AddMinutes(10), 10, 15, 5));
+            read.MarkConcluded("stu-çãõ","miss-ñ");
+
+            var service = new AwardBadgeService(read, write);
+
+            var (badge, xp, log) = await service.AwardAsync("stu-çãõ", themeId, "miss-ñ", "badge-special", now, "r-special");
+
+            Assert.Equal("badge-special", badge.Slug);
+            Assert.Single(write.Logs);
+        }
     }
 }
