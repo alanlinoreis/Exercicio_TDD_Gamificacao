@@ -1,25 +1,59 @@
-# Gamification.Domain (dotnet 9) - Exercise Project
+# Sistema de Gerenciamento de Eventos
 
-Projeto exemplo baseado no enunciado: **Concessão de Badges por Missão** (TDD).
+## 📘 Introdução  
+Este projeto é um **Sistema de Gerenciamento de Eventos**, desenvolvido no âmbito da disciplina de Programação Orientada a Objetos da Universidade Tecnológica Federal do Paraná – Câmpus Medianeira (UTFPR) — Câmpus Medianeira. Ele visa implementar funcionalidades básicas para cadastro, consulta e gerenciamento de eventos, exercitando conceitos de orientação a objetos, arquitetura em camadas e testes de unidade.
 
-## Como rodar
+## 🧩 Tecnologias utilizadas  
+- Linguagem: C#  
+- Plataforma/.NET: 9.0
+- Estrutura de solução: projeto de domínio, aplicação, testes (ex: `EventManagement.Domain`, `EventManagement.Application`, `EventManagement.Tests`)  
+- Ferramentas de teste: xUnit
 
-Requer .NET 9 SDK instalado.
+## 📂 Estrutura da solução  
+A solução está organizada da seguinte forma:  
+- `src/` — código‑fonte da aplicação  
+  - `EventManagement.Domain` — entidades de negócio, interfaces, regras do domínio  
+  - `EventManagement.Application` — serviços de aplicação, casos de uso, orquestração  
+- `tests/` — projetos de teste  
+  - `EventManagement.Domain.Tests` — testes de unidade para a camada de domínio  
+- `EventManagement.sln` — arquivo de solução principal  
 
-No terminal:
-```bash
-cd /path/to/gamification_dotnet9_project
-dotnet restore
-dotnet test
-```
+## ⚙️ Como executar o projeto  
+Siga os passos abaixo para executar o sistema localmente:
 
-O projeto contém:
-- `src/Gamification.Domain/` — domínio com services, policies, ports (interfaces) e modelos.
-- `tests/Gamification.Domain.Tests/` — testes xUnit cobrindo regras principais:
-  - unicidade/idempotência
-  - elegibilidade
-  - janelas de bônus (integral, reduzido, sem bônus)
-  - atomicidade e auditoria
+1. Clone o repositório  
+   ```bash
+   git clone https://github.com/alanlinoreis/Sistema_de_Gerenciamento_de_Eventos.git
+   cd Sistema_de_Gerenciamento_de_Eventos
+   ```
 
-Decisões de design e limitações estão comentadas nos arquivos de código.
+2. Abra a solução `EventManagement.sln` em sua IDE favorita.
 
+3. Restaure os pacotes NuGet  
+   ```bash
+   dotnet restore
+   ```
+
+4. Build da solução  
+   ```bash
+   dotnet build
+   ```
+
+5. Executar os testes de unidade  
+   ```bash
+   dotnet test
+   ```
+
+## 🧪 Exemplos de uso  
+- Após executar a aplicação, você poderá cadastrar um novo evento por meio do serviço disponibilizado.  
+- Em seguida, poderá listar todos os eventos ou consultar por critérios específicos (data, local, etc.).  
+- Os testes de unidade garantem que as regras do domínio (por exemplo: validação de dados, invariantes) estejam funcionando corretamente.
+
+## 📄 Licença  
+Este projeto está licenciado sob a licença **MIT**. Consulte o arquivo [LICENSE](LICENSE) para mais detalhes.
+
+## 👤 Autor  
+Alan Lino dos Reis  
+Curso: Ciência da Computação – UTFPR Medianeira  
+Disciplina: Programação Orientada a Objetos  
+Professor: Everton Coimbra  
